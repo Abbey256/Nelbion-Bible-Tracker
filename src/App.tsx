@@ -1,11 +1,3 @@
-import React, {
-  useState,
-  useEffect,
-  createContext,
-  useContext,
-  useCallback,
-  useMemo,
-} from 'react';
 import { initializeApp } from 'firebase/app';
 import {
   getAuth,
@@ -19,7 +11,6 @@ import {
   getFirestore,
   doc,
   setDoc,
-  getDoc,
   collection,
   onSnapshot,
   setLogLevel,
@@ -33,7 +24,6 @@ import {
   FileText,
   LogIn,
   LogOut,
-  UserPlus,
   Sun,
   Moon,
   Download,
@@ -41,7 +31,6 @@ import {
 // For PDF Generation (include these in your HTML or install via npm/yarn)
 // <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 // <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
 
 // --- Firebase Configuration ---
@@ -55,9 +44,7 @@ const firebaseConfig = {
   appId: '1:866345547800:web:6d1b34f1094b042e022b6d',
   measurementId: 'G-L8H4BPHTQG',
 };
-const appId =
-  typeof __app_id !== 'undefined' ? __app_id : 'nelbion-bible-tracker';
-
+const appId = firebaseConfig.appId ||'nelbion-bible-tracker';
 // --- Bible Data (remains the same) ---
 const BIBLE_BOOKS_DATA = [
   // Old Testament
@@ -135,16 +122,15 @@ const TOTAL_BIBLE_CHAPTERS = BIBLE_BOOKS_DATA.reduce(
 );
 
 // --- React Context for App State ---
-const AppContext = createContext();
-
-export const AppProvider = ({ children }) => {
-  const [db, setDb] = useState(null);
-  const [auth, setAuth] = useState(null);
-  const [currentUser, setCurrentUser] = useState(null);
+const AppContext = createContext({});
+export const AppProvider = ({ children }: { children: React.ReactNode }) => {
+  const [db, setDb] = useState<ReturnType<typeof getFirestore> | null>(null);
+  const [auth, setAuth] = useState<ReturnType<typeof getAuth> | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [currentUser, setCurrentUser] = useState<ReturnType<typeof getAuth>['currentUser'] | null>(null);
   const [isAuthLoading, setIsAuthLoading] = useState(true);
   const [userProgress, setUserProgress] = useState({});
   const [dataLoading, setDataLoading] = useState(true);
-  const [error, setError] = useState(null);
   const [theme, setTheme] = useState('light'); // 'light' or 'dark'
 
   // Initialize Firebase
@@ -205,13 +191,15 @@ export const AppProvider = ({ children }) => {
     }
 
     setDataLoading(true);
-    const collectionPath = `artifacts/${appId}/users/${currentUser.uid}/bibleProgress`;
+    const collectionPath = currentUser?.uid
+      ? `artifacts/${appId}/users/${currentUser.uid}/bibleProgress`
+      : ''; // Or handle the case where currentUser is null differently
     const progressCollectionRef = collection(db, collectionPath);
 
     const unsubscribe = onSnapshot(
       progressCollectionRef,
       (snapshot) => {
-        const newProgress = {};
+        const newProgress = {[key: string]: any} = {};;
         snapshot.docs.forEach((docSnap) => {
           newProgress[docSnap.id] = docSnap.data();
         });
@@ -230,7 +218,7 @@ export const AppProvider = ({ children }) => {
   }, [db, currentUser, isAuthLoading]);
 
   // --- Auth Functions ---
-  const signUpUser = async (email, password, displayName) => {
+  const signUpUser = async (email: string, password: string, displayName: string) => {
     if (!auth) return { error: 'Auth not initialized' };
     try {
       const userCredential = await createUserWithEmailAndPassword(
@@ -244,11 +232,11 @@ export const AppProvider = ({ children }) => {
       return { user: userCredential.user };
     } catch (e) {
       console.error('Sign up error:', e);
-      return { error: e.message };
+      return { error: (e as Error).message };
     }
   };
 
-  const loginUser = async (email, password) => {
+  const loginUser = const loginUser = async (email: string, password: string) => {
     if (!auth) return { error: 'Auth not initialized' };
     try {
       const userCredential = await signInWithEmailAndPassword(
@@ -259,7 +247,7 @@ export const AppProvider = ({ children }) => {
       return { user: userCredential.user };
     } catch (e) {
       console.error('Login error:', e);
-      return { error: e.message };
+      return { error: (e as Error).message };
     }
   };
 
@@ -270,7 +258,7 @@ export const AppProvider = ({ children }) => {
 
   // --- Data Update Function ---
   const updateChapterData = useCallback(
-    async (bookName, chapterNumber, dataToUpdate) => {
+    async (bookName: string, chapterNumber: number, dataToUpdate: any) => {
       if (!db || !currentUser) {
         setError('Cannot save: Not logged in or DB not connected.');
         return;
